@@ -1,5 +1,29 @@
-import Image from "next/image";
+import React, { useState, useEffect } from 'react';
 import { Geist, Geist_Mono } from "next/font/google";
+import Head from 'next/head';
+
+// Components
+import Header from '../components/layout/Header';
+import Sidebar from '../components/layout/Sidebar';
+import Dashboard from '../components/dashboard/Dashboard';
+import HabitsList from '../components/habits/HabitsList';
+import TaskList from '../components/tasks/TaskList';
+import Modal from '../components/ui/Modal';
+import AppLoader from '../components/ui/AppLoader';
+
+// Hooks and Context
+import { useAppData } from '../hooks/useAppData';
+import { useLocalStorage } from '../hooks/useLocalStorage';
+
+// Types 
+import { User } from '../types';
+import { generateUser } from '../utils/mockData';
+import { 
+  HabitFormState, 
+  TaskFormState, 
+  SettingsState, 
+  ModalType 
+} from '../types/proptypes';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -11,105 +35,196 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export default function Home() {
+export default function HabitTracker() {
+  // Loading state
+  const [isLoading, setIsLoading] = useState(true);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+  
+  // Use custom hooks for data management
+  const { 
+    habits, 
+    tasks, 
+    stats, 
+    toggleHabitCompletion,
+    toggleTaskCompletion,
+    addHabit,
+    addTask,
+    deleteHabit,
+    deleteTask,
+    updateHabit,
+    updateTask,
+    setHabits,
+    setTasks 
+  } = useAppData();
+  
+  // User data with localStorage persistence
+  const [user] = useLocalStorage<User>('user', generateUser());
+  
+  // UI state
+  const [activeView, setActiveView] = useState<'dashboard' | 'habits' | 'tasks'>('dashboard');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalType, setModalType] = useState<ModalType>(null);
+  const [isNavOpen, setIsNavOpen] = useState(false);
+  const [newHabit, setNewHabit] = useState<HabitFormState>({
+    name: '',
+    frequency: 'daily',
+    color: '#8884d8',
+  });
+  const [newTask, setNewTask] = useState<TaskFormState>({
+    title: '',
+    dueDate: new Date().toISOString().split('T')[0],
+    priority: 'medium',
+    category: 'Personal',
+  });
+  const [settings, setSettings] = useLocalStorage<SettingsState>('settings', {
+    notifications: true,
+    weekStartsOn: 'Monday',
+  });
+  
+  // Load initial data from localStorage if available
+  useEffect(() => {
+    // If the app is freshly loaded and no data exists yet, initialize with mock data
+    const loadInitialData = async () => {
+      setIsLoading(true);
+      
+      if (typeof window !== 'undefined' && !localStorage.getItem('habits') && !localStorage.getItem('tasks')) {
+        // Import is dynamic to avoid SSR issues with localStorage
+        const { generateHabits, generateTasks } = await import('../utils/mockData');
+        setHabits(generateHabits());
+        setTasks(generateTasks());
+      }
+      
+      // Wait for a minimum time to avoid flickering
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setIsLoading(false);
+      setInitialLoadComplete(true);
+    };
+    
+    if (!initialLoadComplete) {
+      loadInitialData();
+    }
+  }, [setHabits, setTasks, initialLoadComplete]);
+  
+  // Functions
+  const openModal = (type: ModalType) => {
+    setModalType(type);
+    setIsModalOpen(true);
+  };
+  
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setTimeout(() => setModalType(null), 300); // Wait for animation to complete
+    
+    // Reset form state
+    setNewHabit({ 
+      name: '', 
+      frequency: 'daily', 
+      color: '#8884d8'
+    });
+    
+    setNewTask({
+      title: '',
+      dueDate: new Date().toISOString().split('T')[0],
+      priority: 'medium',
+      category: 'Personal',
+    });
+  };
+  
+  const handleAddHabit = () => {
+    if (!newHabit.name) return;
+    
+    addHabit({
+      name: newHabit.name,
+      frequency: newHabit.frequency,
+      color: newHabit.color,
+    });
+    
+    closeModal();
+  };
+  
+  const handleAddTask = () => {
+    if (!newTask.title) return;
+    
+    addTask({
+      title: newTask.title,
+      dueDate: newTask.dueDate,
+      priority: newTask.priority,
+      category: newTask.category,
+    });
+    
+    closeModal();
+  };
+  
+  const handleUpdateSettings = (newSettings: SettingsState) => {
+    setSettings(newSettings);
+    closeModal();
+  };
+
   return (
-    <div
-      className={`${geistSans.className} ${geistMono.className} grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]`}
-    >
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/pages/index.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+    <AppLoader isLoading={isLoading && !initialLoadComplete}>
+      <div
+        className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-black text-gray-100`}
+      >
+        <Head>
+          <title>Personal Analytics & Habit Tracker</title>
+          <meta name="description" content="Track your habits and personal analytics" />
+          <link rel="icon" href="/favicon.ico" />
+        </Head>
+        
+        <div className="flex h-screen overflow-hidden">
+          <Sidebar 
+            activeView={activeView}
+            setActiveView={setActiveView}
+            isNavOpen={isNavOpen}
+            openModal={openModal}
+          />
+          
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <Header 
+              user={user}
+              isNavOpen={isNavOpen}
+              setIsNavOpen={setIsNavOpen}
+              openModal={openModal}
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            
+            <main className="flex-1 overflow-y-auto bg-black">
+              {activeView === 'dashboard' && stats && <Dashboard stats={stats} user={user} />}
+              {activeView === 'habits' && (
+                <HabitsList 
+                  habits={habits} 
+                  toggleHabitCompletion={toggleHabitCompletion} 
+                  deleteHabit={deleteHabit}
+                  updateHabit={updateHabit}
+                  openModal={openModal} 
+                />
+              )}
+              {activeView === 'tasks' && (
+                <TaskList 
+                  tasks={tasks} 
+                  toggleTaskCompletion={toggleTaskCompletion} 
+                  deleteTask={deleteTask}
+                  updateTask={updateTask}
+                  openModal={openModal} 
+                />
+              )}
+            </main>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+        
+        <Modal
+          isOpen={isModalOpen}
+          onClose={closeModal}
+          modalType={modalType}
+          newHabit={newHabit}
+          setNewHabit={setNewHabit}
+          newTask={newTask}
+          setNewTask={setNewTask}
+          settings={settings}
+          setSettings={handleUpdateSettings}
+          addHabit={handleAddHabit}
+          addTask={handleAddTask}
+        />
+      </div>
+    </AppLoader>
   );
 }
